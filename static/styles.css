@@ -1,0 +1,147 @@
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+* {
+    margin: 0;
+}
+
+html {
+    min-height: 100%;
+    background-color: rgb(250, 237, 225);
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif, 'Roboto';
+}
+
+body {
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+    display: block;
+    max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+    font: inherit;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    overflow-wrap: break-word;
+}
+
+#root,
+#__next {
+    isolation: isolate;
+}
+
+#nav-top {
+    display: flex;
+    align-items: center;
+    background-color: #c57f2f;
+    color: white;
+    padding: .3rem .3rem;
+    font-size: 1.3rem;
+    cursor: default;
+    user-select: none;
+    box-shadow: black 0px 0px 10px;
+}
+
+#nav-top-left {
+    margin-left: .3rem;
+}
+
+#nav-top-right {
+    margin-left: auto;
+}
+
+#nav-top-right>a {
+    margin: 0 .5rem;
+    font-size: 1.7rem;
+    cursor: pointer;
+    color: white;
+}
+
+#button-global-toggle-version {
+    display: none;
+}
+
+#section-controller {
+    margin-top: 5rem;
+    margin-bottom: 3rem;
+}
+
+#container-controller {
+    width: 100%;
+    touch-action: manipulation;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#panel-controller {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    user-select: none;
+}
+
+.button-controller {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5rem;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    color: #1f97f8;
+    transition: color 0.3s;
+}
+
+.button-controller:hover {
+    color: #e2e2e2;
+}
+
+#button-prev-track,
+#button-play-pause,
+#button-next-track {
+    grid-row: 1/-1;
+}
+
+#button-volume-up,
+#button-volume-down {
+    grid-column: 4;
+}
+
+#section-debug>details>summary {
+    /* Fade out after 5s */
+    animation: fadeOut 1s forwards 4s;
+}
+
+#section-debug>details>summary:hover {
+    animation: fadeOut 1s backwards;
+}
+
+@keyframes fadeOut {
+    0% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
