@@ -59,7 +59,6 @@ h6 {
     font-size: 1.3rem;
     cursor: default;
     user-select: none;
-    box-shadow: black 0px 0px 10px;
 }
 
 #nav-top-left {
@@ -81,11 +80,23 @@ h6 {
     display: none;
 }
 
+#image-album[data-loaded="false"] {
+    display: none;
+}
+
+#section-media {
+    margin-top: 1.4rem;
+}
 #section-controller {
-    margin-top: 5rem;
+    margin-top: 1rem;
     margin-bottom: 3rem;
 }
 
+#container-media {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
 #container-controller {
     width: 100%;
     touch-action: manipulation;
@@ -94,6 +105,36 @@ h6 {
     align-items: center;
 }
 
+#panel-media {
+    display: flex;
+    flex-direction: column;
+    word-wrap: break-word;
+    max-width: 20rem;
+    height: 30rem;
+}
+
+#image-album {
+    width: 100%;
+    border-radius: 0.5rem;
+    box-shadow: black 0px 0px 10px;
+    align-self: center;
+}
+
+#text-track-title {
+    margin-top: 1rem;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+#text-track-artist {
+    margin-top: 0.5rem;
+    font-size: 1.2rem;
+}
+
+#text-track-album {
+    margin-top: 0.5rem;
+    font-size: 1rem;
+}
 #panel-controller {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr 1fr;
@@ -115,6 +156,9 @@ h6 {
 .button-controller:hover {
     color: #e2e2e2;
 }
+#button-play-pause:hover {
+    color: #53b2ff;
+}
 
 #button-prev-track,
 #button-play-pause,
@@ -122,6 +166,10 @@ h6 {
     grid-row: 1/-1;
 }
 
+#button-play-pause[data-paused="true"] .fa-pause,
+#button-play-pause[data-paused="false"] .fa-play {
+    opacity: .2;
+}
 #button-volume-up,
 #button-volume-down {
     grid-column: 4;

@@ -1,6 +1,11 @@
 use std::time::Duration;
 
-use axum::{body::Body, middleware::from_fn_with_state, routing::post, Router};
+use axum::{
+    body::Body,
+    middleware::from_fn_with_state,
+    routing::{get, post},
+    Router,
+};
 use axum_server::tls_rustls::RustlsConfig;
 use hyper::{header::CONTENT_TYPE, Response};
 use tower_http::{
@@ -14,7 +19,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod auth;
 mod cmd;
 pub mod ctrl;
-pub(crate) mod error;
+mod error;
+pub mod media;
+mod sys;
 
 async fn load_private_key() -> [u8; 64] {
     use base64::prelude::*;
@@ -52,7 +59,8 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let auth_state = auth::GlobalAuthState::new(load_private_key().await);
+    let private_key = load_private_key().await;
+    let auth_state = auth::GlobalAuthState::new(private_key);
     let cmd_route = Router::new()
         .route("/play_pause", post(cmd::handle_play_pause))
         .route("/next_track", post(cmd::handle_next_track))
@@ -63,6 +71,11 @@ async fn main() {
             auth_state.clone(),
             auth::auth_middleware_fn,
         ));
+    let media_crypto_state = media::MediaCryptoState::new(&private_key);
+    let media_route = Router::new()
+        .route("/info", get(media::handle_get_media_info))
+        .route("/album_img", get(media::handle_get_album_image))
+        .with_state(media_crypto_state);
 
     let app = Router::new()
         .route_service("/", ServeFile::new("static/index.html"))
@@ -72,6 +85,7 @@ async fn main() {
         )
         .route("/session", post(auth::handle_new_session))
         .nest("/cmd", cmd_route)
+        .nest("/media", media_route)
         .layer((
             TraceLayer::new_for_http(),
             TimeoutLayer::new(Duration::from_secs(3)),

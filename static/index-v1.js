@@ -186,3 +186,88 @@ async function sessionLoop() {
 }
 
 sessionLoop()
+
+/**
+ * @param {string} path 
+ */
+async function requestMedia(path) {
+    const res = await fetch('media/' + path)
+    if (!res.ok) {
+        throw new Error(`Failed to get media/${path}: ${res.status}`)
+    }
+    return await res.json()
+}
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+async function mediaLoop() {
+    const $albumImage = document.getElementById('image-album')
+    let lastMediaInfo = {
+        title: '',
+        artist: '',
+        album: '',
+        timeline: {
+            position: 0,
+            duration: 0,
+            paused: true
+        }
+    }
+    let lastAlbumImageBlob = ''
+    let lastAlbumImageHash = ''
+    while (true) {
+        /**
+         * @type {typeof lastMediaInfo}
+         */
+        let mediaInfo
+        try {
+            mediaInfo = await requestMedia('info')
+        } catch (e) {
+            console.error(e)
+            await sleep(3000)
+            continue
+        }
+        document.getElementById('button-play-pause').setAttribute('data-paused', String(mediaInfo.timeline.paused))
+        const trackChanged = lastMediaInfo.title !== mediaInfo.title || lastMediaInfo.artist !== mediaInfo.artist || lastMediaInfo.album !== mediaInfo.album
+        if (trackChanged) {
+            document.getElementById('text-track-title').textContent = mediaInfo.title
+            document.getElementById('text-track-artist').textContent = mediaInfo.artist
+            document.getElementById('text-track-album').textContent = mediaInfo.album
+
+            /**
+             * @type {{Url: string} | {Blob: {mime: string, base64: string}}}
+             */
+            let albumImage
+            let albumImageHash = lastAlbumImageHash
+            do {
+                try {
+                    albumImage = await requestMedia('album_img')
+                } catch (e) {
+                    console.error(e)
+                    break
+                }
+                albumImageHash = albumImage?.Url || albumImage?.Blob?.base64 || ''
+            } while (albumImageHash === lastAlbumImageHash && (await sleep(1000) || true))
+            lastAlbumImageHash = albumImageHash
+            if (albumImage) {
+                if ('Url' in albumImage) {
+                    $albumImage.src = albumImage.Url
+                    $albumImage.setAttribute('data-loaded', 'true')
+                } else {
+                    const imageRes = await fetch(`data:${albumImage.Blob.mime};base64,${albumImage.Blob.base64}`)
+                    const blob = await imageRes.blob()
+                    const url = URL.createObjectURL(new Blob([blob], { type: albumImage.Blob.mime }))
+                    $albumImage.src = url
+                    $albumImage.setAttribute('data-loaded', 'true')
+                    if (lastAlbumImageBlob) {
+                        URL.revokeObjectURL(lastAlbumImageBlob)
+                    }
+                    lastAlbumImageBlob = url
+                }
+            } else {
+                $albumImage.setAttribute('data-loaded', 'false')
+            }
+        }
+        lastMediaInfo = mediaInfo
+        await sleep(1000)
+    }
+}
+
+mediaLoop()
