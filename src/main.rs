@@ -75,6 +75,7 @@ async fn main() {
     let media_route = Router::new()
         .route("/info", get(media::handle_get_media_info))
         .route("/album_img", get(media::handle_get_album_image))
+        .route("/volume", get(media::handle_get_volume))
         .with_state(media_crypto_state);
 
     let app = Router::new()

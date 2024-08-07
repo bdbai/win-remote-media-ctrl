@@ -199,7 +199,14 @@ async function requestMedia(path) {
 }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 async function mediaLoop() {
+    const $playPauseBtn = document.getElementById('button-play-pause')
+    /** * @type {HTMLDivElement} */
+    const $trackProgressCursor = document.querySelector('#progress-bar-track-progress>.progress-bar-cursor')
     const $albumImage = document.getElementById('image-album')
+    const $trackTitle = document.getElementById('text-track-title')
+    const $trackArtist = document.getElementById('text-track-artist')
+    const $trackAlbum = document.getElementById('text-track-album')
+
     let lastMediaInfo = {
         title: '',
         artist: '',
@@ -224,13 +231,25 @@ async function mediaLoop() {
             await sleep(3000)
             continue
         }
-        document.getElementById('button-play-pause').setAttribute('data-paused', String(mediaInfo.timeline.paused))
+        if (mediaInfo.timeline.paused) {
+            $playPauseBtn.classList.add('paused')
+            $playPauseBtn.classList.remove('playing')
+        }
+        else {
+            $playPauseBtn.classList.add('playing')
+            $playPauseBtn.classList.remove('paused')
+        }
+        if (!isNaN(mediaInfo.timeline.duration) && !isNaN(mediaInfo.timeline.position) && mediaInfo.timeline.duration > 0) {
+            $trackProgressCursor.style.left = `${mediaInfo.timeline.position / mediaInfo.timeline.duration * 100}%`
+        }
         const trackChanged = lastMediaInfo.title !== mediaInfo.title || lastMediaInfo.artist !== mediaInfo.artist || lastMediaInfo.album !== mediaInfo.album
         if (trackChanged) {
-            document.getElementById('text-track-title').textContent = mediaInfo.title
-            document.getElementById('text-track-artist').textContent = mediaInfo.artist
-            document.getElementById('text-track-album').textContent = mediaInfo.album
-
+            $trackTitle.textContent = mediaInfo.title
+            $trackArtist.textContent = mediaInfo.artist
+            $trackAlbum.textContent = mediaInfo.album
+        }
+        const albumChanged = lastMediaInfo.album !== mediaInfo.album
+        if (albumChanged) {
             /**
              * @type {{Url: string} | {Blob: {mime: string, base64: string}}}
              */
@@ -249,18 +268,17 @@ async function mediaLoop() {
             if (albumImage) {
                 if ('Url' in albumImage) {
                     $albumImage.src = albumImage.Url
-                    $albumImage.setAttribute('data-loaded', 'true')
                 } else {
                     const imageRes = await fetch(`data:${albumImage.Blob.mime};base64,${albumImage.Blob.base64}`)
                     const blob = await imageRes.blob()
                     const url = URL.createObjectURL(new Blob([blob], { type: albumImage.Blob.mime }))
                     $albumImage.src = url
-                    $albumImage.setAttribute('data-loaded', 'true')
                     if (lastAlbumImageBlob) {
                         URL.revokeObjectURL(lastAlbumImageBlob)
                     }
                     lastAlbumImageBlob = url
                 }
+                $albumImage.classList.add('loaded')
             } else {
                 $albumImage.setAttribute('data-loaded', 'false')
             }
@@ -271,3 +289,23 @@ async function mediaLoop() {
 }
 
 mediaLoop()
+
+document.querySelectorAll('#button-volume-up,#button-volume-down').forEach($el => {
+    const $volumeLevel = document.getElementById('text-volume-level')
+
+    $el.addEventListener('click', async e => {
+        await sleep(50)
+        const res = await fetch('media/volume')
+        if (!res.ok) {
+            alert('Failed to change volume: ' + res.status)
+        }
+        /**
+         * @type {{level: number, muted: boolean}}
+         */
+        const volume = await res.json()
+        $volumeLevel.textContent = `${Math.round(volume.level * 100)}%`
+        $volumeLevel.classList.remove('show')
+        $volumeLevel.offsetHeight
+        $volumeLevel.classList.add('show')
+    })
+})

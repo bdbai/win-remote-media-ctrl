@@ -25,7 +25,7 @@
     <section id="section-media">
         <div id="container-media">
             <div id="panel-media">
-                <img id="image-album" data-loaded="false" alt="Album cover image">
+                <img id="image-album" alt="Album cover image">
                 <div id="text-track-title"></div>
                 <div id="text-track-artist"></div>
                 <div id="text-track-album"></div>
@@ -35,6 +35,10 @@
     <section id="section-controller">
         <div id="container-controller">
             <div id="panel-controller">
+                <div id="progress-bar-track-progress" class="progress-bar">
+                    <div class="progress-bar-background"></div>
+                    <div class="progress-bar-cursor breathing"></div>
+                </div>
                 <button id="button-prev-track" title="Previous Track" class="button-controller"
                     data-cmd-name="prev_track" type="button">
                     <i class="fa-solid fa-backward-fast"></i>
@@ -57,7 +61,11 @@
                     data-cmd-name="volume_down" type="button">
                     <i class="fa-solid fa-volume-low"></i>
                 </button>
+                <div id="container-volume-level">
+                    <div id="text-volume-level"></div>
+                </div>
             </div>
+        </div>
     </section>
     <section id="section-debug">
         <details>

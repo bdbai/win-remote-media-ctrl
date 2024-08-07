@@ -1,3 +1,4 @@
+use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 
 use aes_gcm::{Aes128Gcm, KeyInit};
@@ -62,6 +63,24 @@ pub(crate) async fn handle_get_album_image(
     Ok(Json(image))
 }
 
+pub(crate) async fn handle_get_volume() -> impl IntoResponse {
+    static VOLUME_CLIENT: LazyLock<Mutex<VolumeClient>> = LazyLock::new(|| {
+        Mutex::new(VolumeClient::create().expect("Failed to create volume client"))
+    });
+
+    let mut volume_client = VOLUME_CLIENT.lock().unwrap();
+    let volume = match volume_client.get_volume() {
+        Ok(volume) => volume,
+        Err(err) => {
+            error!(?err, "Failed to get volume");
+            return Err(ResponseError {
+                status_code: StatusCode::INTERNAL_SERVER_ERROR,
+                error_code: "get_volume_error",
+            });
+        }
+    };
+    Ok(Json(volume))
+}
 #[derive(Debug, Clone, Serialize)]
 pub struct MediaInfo {
     pub title: String,

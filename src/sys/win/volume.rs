@@ -5,7 +5,7 @@ use std::task::{Context, Poll};
 
 use futures::task::AtomicWaker;
 use tracing::info;
-use windows::core::{implement, AsImpl, Result};
+use windows::core::{implement, AgileReference, AsImpl, Result};
 use windows::Win32::Media::Audio::{
     eMultimedia, eRender,
     Endpoints::{
@@ -22,8 +22,8 @@ use crate::media::VolumeState;
 static COM_INIT: std::sync::Once = std::sync::Once::new();
 
 pub struct VolumeClient {
-    volume: IAudioEndpointVolume,
-    callback: Option<IAudioEndpointVolumeCallback>,
+    volume: AgileReference<IAudioEndpointVolume>,
+    callback: Option<AgileReference<IAudioEndpointVolumeCallback>>,
 }
 
 #[implement(IAudioEndpointVolumeCallback)]
@@ -48,24 +48,27 @@ impl VolumeClient {
             let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         });
         Ok(Self {
-            volume: Self::get_default_audio_volume()?,
+            volume: AgileReference::new(&Self::get_default_audio_volume()?)?,
             callback: None,
         })
     }
 
     fn reset_audio_volume(&mut self) -> Result<()> {
-        self.volume = Self::get_default_audio_volume()?;
+        let volume = Self::get_default_audio_volume()?;
+        self.volume = AgileReference::new(&volume)?;
         if let Some(callback) = &self.callback {
+            let callback = callback.resolve()?;
             unsafe {
-                self.volume.RegisterControlChangeNotify(callback)?;
+                volume.RegisterControlChangeNotify(&callback)?;
             }
         }
         Ok(())
     }
     fn get_volume_once(&self) -> Result<VolumeState> {
+        let volume = self.volume.resolve()?;
         unsafe {
-            let level = (self.volume.GetMasterVolumeLevelScalar()? * 100.0).round() / 100.0;
-            let muted = self.volume.GetMute()?.0 != 0;
+            let level = (volume.GetMasterVolumeLevelScalar()? * 100.0).round() / 100.0;
+            let muted = volume.GetMute()?.0 != 0;
             Ok(VolumeState { level, muted })
         }
     }
@@ -80,7 +83,7 @@ impl VolumeClient {
     }
 
     pub fn poll_volume_change(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        let volume = &self.volume;
+        let volume = self.volume.resolve()?;
         let callback = if let Some(callback) = &self.callback {
             callback
         } else {
@@ -88,8 +91,9 @@ impl VolumeClient {
             unsafe {
                 volume.RegisterControlChangeNotify(&callback)?;
             }
-            self.callback.insert(callback)
-        };
+            self.callback.insert(AgileReference::new(&callback)?)
+        }
+        .resolve()?;
         let callback_impl: &VolumeChangedCallback = unsafe { callback.as_impl() };
         if callback_impl.fired.swap(false, Ordering::SeqCst) {
             Poll::Ready(Ok(()))
@@ -106,8 +110,14 @@ impl VolumeClient {
 impl Drop for VolumeClient {
     fn drop(&mut self) {
         if let Some(callback) = &self.callback {
+            let Ok(callback) = callback.resolve() else {
+                return;
+            };
+            let Ok(volume) = self.volume.resolve() else {
+                return;
+            };
             unsafe {
-                let _ = self.volume.UnregisterControlChangeNotify(callback);
+                let _ = volume.UnregisterControlChangeNotify(&callback);
             }
         }
     }
