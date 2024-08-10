@@ -150,22 +150,22 @@ impl QQMusicProcess {
         Ok(unsafe { wcstr.to_string() }.ok())
     }
     pub(super) fn collect_raw_info(&mut self) -> io::Result<Option<RawInfo>> {
-        let version: u32 = match unsafe { self.read_dll_data(0xAAAA84) } {
+        let version: u32 = match unsafe { self.read_dll_data(0xAABAC4) } {
             Ok(version) => version,
             Err(_) => {
                 self.try_open_process()?;
-                unsafe { self.read_dll_data(0xAAAA84) }?
+                unsafe { self.read_dll_data(0xAABAC4) }?
             }
         };
-        if version != 2036 {
+        if version != 2037 {
             return Ok(None);
         }
 
         let mut last_raw_info = RawInfo::default();
         for _ in 0..6 {
-            let paused = unsafe { self.read_dll_data(0xAAEEF4)? };
-            let track_info = unsafe { self.read_dll_data(0xAAEF38)? };
-            let album_img_ptr = unsafe { self.read_dll_data(0xAAF088)? };
+            let paused = unsafe { self.read_dll_data(0xAAFF34)? };
+            let track_info = unsafe { self.read_dll_data(0xAAFF78)? };
+            let album_img_ptr = unsafe { self.read_dll_data(0xAB00C8)? };
             let mut raw_info = RawInfo {
                 paused,
                 track_info,
