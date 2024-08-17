@@ -59,6 +59,7 @@ pub(crate) async fn handle_new_session(
 ) -> Result<Json<NewSessionResponse>, ResponseError> {
     const MAX_TIMESTAMP_DISCREPANCY: u64 = 1000 * 60;
     const MAX_SESSION: usize = 9;
+    const MAX_SESSION_DURATION: Duration = Duration::from_secs(60 * 60 * 24);
 
     let mut mac = state.private_key_hmac.clone();
     mac.update(&req.timestamp);
@@ -76,7 +77,6 @@ pub(crate) async fn handle_new_session(
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("system time before unix epoch")
         .as_millis() as u64;
-    let oldest_session_time = now - Duration::from_secs(60 * 60 * 24);
 
     let mut registry = state.sessions.lock().unwrap();
     if req_timestamp <= registry.last_timestamp {
@@ -98,9 +98,9 @@ pub(crate) async fn handle_new_session(
     }
 
     let existing_session_count = registry.sessions.len();
-    registry
-        .sessions
-        .retain(|_, session| session.created_at > oldest_session_time);
+    registry.sessions.retain(|_, session| {
+        now.saturating_duration_since(session.created_at) < MAX_SESSION_DURATION
+    });
     if let Some(excessive_session_count) = registry.sessions.len().checked_sub(MAX_SESSION) {
         let sorted_sessions = registry
             .sessions
