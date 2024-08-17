@@ -6,6 +6,7 @@ authors = ["bdbai <bdbaiapp@163.com>"]
 license = "WTFPL"
 
 [dependencies]
+paste = "1"
 getrandom = "0.2"
 
 axum = { version = "0.7", features = ["tracing"] }

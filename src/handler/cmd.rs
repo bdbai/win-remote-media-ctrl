@@ -2,6 +2,7 @@ use std::io;
 
 use axum::{response::IntoResponse, Json};
 use hyper::StatusCode;
+use paste::paste;
 use serde::Serialize;
 use tracing::{error, info};
 
@@ -21,25 +22,22 @@ fn handle_cmd(cmd: impl Fn() -> io::Result<()>, name: &str) -> impl IntoResponse
     }
 }
 
-pub(crate) async fn handle_play_pause() -> impl IntoResponse {
-    handle_cmd(ctrl::press_play_pause, "play_pause")
+macro_rules! handle_cmd {
+    ($name:ident) => {
+        paste! {
+            pub(crate) async fn [<handle_ $name>]() -> impl IntoResponse {
+                handle_cmd(ctrl::[<press_ $name>], stringify!($name))
+            }
+        }
+    };
 }
 
-pub(crate) async fn handle_next_track() -> impl IntoResponse {
-    handle_cmd(ctrl::press_next_track, "next_track")
-}
-
-pub(crate) async fn handle_prev_track() -> impl IntoResponse {
-    handle_cmd(ctrl::press_prev_track, "prev_track")
-}
-
-pub(crate) async fn handle_volume_down() -> impl IntoResponse {
-    handle_cmd(ctrl::press_volume_down, "volume_down")
-}
-
-pub(crate) async fn handle_volume_up() -> impl IntoResponse {
-    handle_cmd(ctrl::press_volume_up, "volume_up")
-}
+handle_cmd!(play_pause);
+handle_cmd!(next_track);
+handle_cmd!(prev_track);
+handle_cmd!(volume_down);
+handle_cmd!(volume_up);
+handle_cmd!(like);
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct CommandResponse {}

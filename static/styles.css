@@ -112,7 +112,13 @@ h6 {
     min-height: 30rem;
 }
 
+#image-album-wrapper {
+    line-height: 0;
+    position: relative;
+}
+
 #image-album {
+    touch-action: manipulation;
     width: 100%;
     border-radius: 0.5rem;
     box-shadow: black 0px 0px 10px;
@@ -122,6 +128,37 @@ h6 {
 
 #image-album.loaded {
     display: unset;
+}
+
+#image-album-like {
+    position: absolute;
+    margin: auto;
+    width: 1rem;
+    height: 1rem;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    color: #fd30b6;
+    pointer-events: none;
+    opacity: 0;
+}
+
+#image-album-like.show {
+    /* Animation that enlarges and fade out at the same time */
+    animation: enlargeAndFadeOut 0.6s forwards;
+}
+
+@keyframes enlargeAndFadeOut {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(2);
+        opacity: 0;
+    }
 }
 
 #text-track-title {

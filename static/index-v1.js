@@ -135,12 +135,12 @@ class Session {
 
 const Commands =
     /** @type {const} */
-    (['play_pause', 'prev_track', 'next_track', 'volume_up', 'volume_down'])
+    (['play_pause', 'prev_track', 'next_track', 'volume_up', 'volume_down', 'like'])
 /** @typedef {typeof Commands[number]} CmdName */
 
 /** @type {{name: CmdName, resolve: () => {}[]}[]} */
 const cmdRequests = []
-let notifyNewSession = () => { }
+let notifyNewCommand = () => { }
 
 async function sessionLoop() {
     console.log('loaded v1')
@@ -152,24 +152,46 @@ async function sessionLoop() {
         const $el = e.target
         session.setPrivateKey($el.value)
     })
-    document.querySelectorAll('#panel-controller .button-controller').forEach($el => {
-        $el.addEventListener('click', async e => {
-            const cmd = $el.getAttribute('data-cmd-name')
-            if (!Commands.includes(cmd)) {
-                alert('Invalid command: ' + cmd)
-                return
-            }
-            cmdRequests.push({
-                name: cmd,
-                resolve: () => { }
-            })
-            notifyNewSession()
+    /**
+     * @param {Element} $el 
+     * @returns {(e: Event) => void}
+     */
+    const commandHandler = $el => e => {
+        const cmd = $el.getAttribute('data-cmd-name')
+        if (!Commands.includes(cmd)) {
+            alert('Invalid command: ' + cmd)
+            return
+        }
+        cmdRequests.push({
+            name: cmd,
+            resolve: () => { }
         })
+        notifyNewCommand()
+    }
+    document.querySelectorAll('#panel-controller .button-controller').forEach($el => {
+        $el.addEventListener('click', commandHandler($el))
     })
+    const $albumImg = document.getElementById('image-album')
+    const albumImgHandler = commandHandler($albumImg)
+    let albumImgLastClick = 0
+    const $albumLike = document.getElementById('image-album-like')
+    $albumImg.addEventListener('click', e => {
+        const now = Date.now()
+        const diff = now - albumImgLastClick
+        albumImgLastClick = now
+        if (diff >= 300) {
+            return
+        }
+        albumImgHandler(e)
+        $albumLike.classList.remove('show')
+        $albumLike.offsetHeight
+        $albumLike.classList.add('show')
+    })
+
     while (true) {
         const cmd = cmdRequests.shift()
         if (!cmd) {
-            await new Promise(resolve => notifyNewSession = resolve)
+            await new Promise(resolve => notifyNewCommand = resolve)
             continue
         }
 

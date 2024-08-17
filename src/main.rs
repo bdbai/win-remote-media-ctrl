@@ -17,11 +17,13 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod auth;
-mod cmd;
 pub mod ctrl;
 mod error;
+mod handler;
 pub mod media;
 mod sys;
+
+use handler::cmd;
 
 async fn load_private_key() -> [u8; 64] {
     use base64::prelude::*;
@@ -67,15 +69,16 @@ async fn main() {
         .route("/prev_track", post(cmd::handle_prev_track))
         .route("/volume_down", post(cmd::handle_volume_down))
         .route("/volume_up", post(cmd::handle_volume_up))
+        .route("/like", post(cmd::handle_like))
         .layer(from_fn_with_state(
             auth_state.clone(),
             auth::auth_middleware_fn,
         ));
-    let media_crypto_state = media::MediaCryptoState::new(&private_key);
+    let media_crypto_state = handler::media::MediaCryptoState::new(&private_key);
     let media_route = Router::new()
-        .route("/info", get(media::handle_get_media_info))
-        .route("/album_img", get(media::handle_get_album_image))
-        .route("/volume", get(media::handle_get_volume))
+        .route("/info", get(handler::media::handle_get_media_info))
+        .route("/album_img", get(handler::media::handle_get_album_image))
+        .route("/volume", get(handler::media::handle_get_volume))
         .with_state(media_crypto_state);
 
     let app = Router::new()
