@@ -103,22 +103,15 @@
 </script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
-        if (getSettingsGlobalVersion() === 'v2') {
-            const rxjsScript = document.createElement('script')
-            rxjsScript.src = 'https://unpkg.com/rxjs@7.8.1/dist/bundles/rxjs.umd.min.js'
-            rxjsScript.onload = () => {
-                const scriptV2 = document.createElement('script')
-                scriptV2.src = 'static/index-v2.js'
-                scriptV2.type = 'module'
-                document.body.appendChild(scriptV2)
-            }
-            document.body.appendChild(rxjsScript)
-        } else {
-            const scriptV1 = document.createElement('script')
-            scriptV1.src = 'static/index-v1.js'
-            scriptV1.type = 'module'
-            document.body.appendChild(scriptV1)
+        const rxjsScript = document.createElement('script')
+        rxjsScript.src = 'https://unpkg.com/rxjs@7.8.1/dist/bundles/rxjs.umd.min.js'
+        rxjsScript.onload = () => {
+            const scriptV2 = document.createElement('script')
+            scriptV2.src = 'static/index-v2.js'
+            scriptV2.type = 'module'
+            document.body.appendChild(scriptV2)
         }
+        document.body.appendChild(rxjsScript)
     })
 </script>
 
