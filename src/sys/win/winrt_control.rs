@@ -1,8 +1,11 @@
 use std::io;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::task::Poll;
 
+use futures::task::AtomicWaker;
 use windows::core::ComInterface;
+use windows::Foundation::TypedEventHandler;
 use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
 use windows::Storage::Streams::DataReader;
 use windows::Win32::System::WinRT::IBufferByteAccess;
@@ -24,6 +27,12 @@ pub(super) struct WinrtMediaInfo {
     pub paused: bool,
 }
 
+#[derive(Default)]
+struct MediaChangedCallbackContext {
+    waker: AtomicWaker,
+    fired: AtomicBool,
+}
+
 impl WinrtControl {
     pub(super) async fn create() -> io::Result<Self> {
         Ok(Self {
@@ -43,12 +52,52 @@ impl WinrtControl {
             .contains("QQMusic.exe")
     }
 
-    pub(super) async fn _media_change(&self) {
-        todo!()
+    pub(super) async fn media_changed(&self) -> io::Result<()> {
+        use std::sync::atomic::Ordering;
+
+        let ctx = Arc::new(MediaChangedCallbackContext::default());
+        let session_changed_token = self.manager.CurrentSessionChanged(&{
+            let ctx = ctx.clone();
+            TypedEventHandler::new(move |_, _| {
+                ctx.fired.store(true, Ordering::SeqCst);
+                ctx.waker.wake();
+                Ok(())
+            })
+        })?;
+        let session = self.manager.GetCurrentSession().ok();
+        let media_changed_token = session
+            .map(|session| {
+                let token = session.MediaPropertiesChanged(&{
+                    let ctx = ctx.clone();
+                    TypedEventHandler::new(move |_, _| {
+                        ctx.fired.store(true, Ordering::SeqCst);
+                        ctx.waker.wake();
+                        Ok(())
+                    })
+                })?;
+                windows::core::Result::Ok((session, token))
+            })
+            .transpose()?;
+        futures::future::poll_fn(|cx| {
+            if ctx.fired.load(Ordering::SeqCst) {
+                return Poll::Ready(());
+            }
+            ctx.waker.register(cx.waker());
+            Poll::Pending
+        })
+        .await;
+        let _ = self
+            .manager
+            .RemoveCurrentSessionChanged(session_changed_token);
+        let _ =
+            media_changed_token.map(|(session, token)| session.RemoveMediaPropertiesChanged(token));
+        Ok(())
     }
 
-    pub(super) async fn get_media_info(&self) -> io::Result<WinrtMediaInfo> {
-        let session = self.manager.GetCurrentSession()?;
+    pub(super) async fn get_media_info(&self) -> io::Result<Option<WinrtMediaInfo>> {
+        let Ok(session) = self.manager.GetCurrentSession() else {
+            return Ok(None);
+        };
 
         let media_property = session.TryGetMediaPropertiesAsync()?.await?;
         let title = media_property.Title()?.to_string_lossy();
@@ -61,20 +110,22 @@ impl WinrtControl {
 
         let paused = session.GetPlaybackInfo()?.PlaybackStatus()?.0 != 4;
 
-        Ok(WinrtMediaInfo {
+        Ok(Some(WinrtMediaInfo {
             title,
             artist,
             album,
             position,
             duration,
             paused,
-        })
+        }))
     }
 
-    pub(super) async fn get_album_img(&self) -> io::Result<AlbumImage> {
+    pub(super) async fn get_album_img(&self) -> io::Result<Option<AlbumImage>> {
         use base64::prelude::*;
 
-        let session = self.manager.GetCurrentSession()?;
+        let Ok(session) = self.manager.GetCurrentSession() else {
+            return Ok(None);
+        };
         let media_property = session.TryGetMediaPropertiesAsync()?.await?;
         let mut content_type;
         let base64 = {
@@ -96,10 +147,10 @@ impl WinrtControl {
         if let Some(comma_pos) = content_type.find(',') {
             content_type.replace_range(comma_pos.., "");
         }
-        Ok(AlbumImage::Blob {
+        Ok(Some(AlbumImage::Blob {
             mime: content_type,
             base64,
-        })
+        }))
     }
 }
 

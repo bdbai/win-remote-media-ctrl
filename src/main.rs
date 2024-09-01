@@ -81,6 +81,7 @@ async fn main() {
         .route("/volume", get(handler::media::handle_get_volume))
         .with_state(media_crypto_state);
 
+    let ws_state = handler::ws::WsGlobalState::new(private_key);
     let app = Router::new()
         .route_service("/", ServeFile::new("static/index.html"))
         .nest_service(
@@ -104,6 +105,10 @@ async fn main() {
                     .ok()
             }),
         ))
+        .route(
+            "/main_ws",
+            get(handler::ws::ws_handler).with_state(ws_state),
+        )
         .with_state(auth_state);
 
     axum_server::bind_rustls(

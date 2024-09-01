@@ -2,14 +2,22 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-pub use crate::sys::{get_album_image, get_media_info, VolumeClient};
+pub use crate::sys::{
+    get_album_image, get_media_info, get_timeline_state, media_changed, VolumeClient,
+};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct MediaInfo {
+    #[serde(flatten)]
+    pub track: TrackInfo,
+    pub timeline: TimelineState,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct TrackInfo {
     pub title: String,
     pub artist: String,
     pub album: String,
-    pub timeline: TimelineState,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -18,7 +26,7 @@ pub enum AlbumImage {
     Blob { mime: String, base64: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct TimelineState {
     #[serde(serialize_with = "serialize_ms")]
     pub duration: Duration,
