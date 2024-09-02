@@ -120,11 +120,11 @@ class CryptoSession {
     }
 }
 
-const $inputPrivateKey = document.getElementById('input-private-key')
+const $inputPrivateKey = /** @type {HTMLInputElement} */ (document.getElementById('input-private-key'))
 $inputPrivateKey.value = localStorage.getItem('private-key') ?? ''
 const createPsk$ = () =>
-    rxjs.fromEvent(document.querySelector('#input-private-key'), 'change').pipe(
-        rxjs.map(e => String(e.target.value).trim()),
+    rxjs.fromEvent($inputPrivateKey, 'change').pipe(
+        rxjs.map(e => $inputPrivateKey.value.trim()),
         rxjs.debounceTime(1000),
         rxjs.distinctUntilChanged(),
         rxjs.startWith(String($inputPrivateKey.value)),
@@ -134,20 +134,21 @@ const createPsk$ = () =>
 const Commands =
     /** @type {const} */
     (['heartbeat', 'heartbeat_res', 'play_pause', 'prev_track', 'next_track', 'volume_up', 'volume_down', 'like'])
+/** @typedef {(typeof Commands)[number]} Commands */
 /** @type {Subject<Commands>} */
 const heartbeatSubject$ = new rxjs.Subject()
 /**
  * @returns {Observable<Commands>}
  */
 function createControl$() {
-    const buttonCtrl$s = [...document.querySelectorAll('#panel-controller .button-controller')]
+    const buttonCtrl$s = Array.from(document.querySelectorAll('#panel-controller .button-controller'))
         .map(button => rxjs.fromEvent(button, 'click')
             .pipe(rxjs.map(() => {
                 const cmdName = button.getAttribute('data-cmd-name')
-                if (!Commands.includes(cmdName)) {
+                if (!/** @type {readonly string[]} */(Commands).includes(cmdName)) {
                     new Error(`Invalid command name: ${cmdName}`)
                 }
-                return cmdName
+                return /** @type {Commands} */ (cmdName)
             })))
     const $albumLike = document.getElementById('image-album-like')
     const like$ = rxjs.fromEvent(document.getElementById('image-album'), 'click')
@@ -156,7 +157,7 @@ function createControl$() {
             rxjs.startWith(0),
             rxjs.pairwise(),
             rxjs.filter(([prev, curr]) => curr - prev < 500),
-            rxjs.map(() => 'like'),
+            rxjs.map(() => /** @type {'like'} */('like')),
             rxjs.tap(() => {
                 $albumLike.classList.remove('show')
                 $albumLike.offsetHeight
@@ -211,7 +212,7 @@ function subscribeWs() {
     const $playPauseBtn = document.getElementById('button-play-pause')
     /** * @type {HTMLDivElement} */
     const $trackProgressCursor = document.querySelector('#progress-bar-track-progress>.progress-bar-cursor')
-    const $albumImage = document.getElementById('image-album')
+    const $albumImage = /** @type {HTMLImageElement} */ (document.getElementById('image-album'))
     const $trackTitle = document.getElementById('text-track-title')
     const $trackArtist = document.getElementById('text-track-artist')
     const $trackAlbum = document.getElementById('text-track-album')
@@ -278,7 +279,7 @@ function subscribeWs() {
                 })),
             ),
             createControl$().pipe(
-                rxjs.startWith('heartbeat'),
+                rxjs.startWith(/** @type {'heartbeat'} */('heartbeat')),
                 rxjs.concatMap(cmd => rxjs.from(ctx.uploadCrypto.encrypt(mapCommandToPayload(cmd)))),
                 rxjs.map(payload => ({
                     ws: ctx.ws,
@@ -288,6 +289,10 @@ function subscribeWs() {
             rxjs.merge(
                 ctx.msg$.pipe(
                     rxjs.debounceTime(30 * 1000),
+                    rxjs.mergeWith(rxjs.fromEvent(document, 'visibilitychange').pipe(
+                        rxjs.filter(() => !document.hidden),
+                        rxjs.throttleTime(1000)
+                    )),
                     rxjs.tap(() => heartbeatSubject$.next('heartbeat')),
                     rxjs.ignoreElements()
                 ),
@@ -364,10 +369,8 @@ function subscribeWs() {
 
 subscribeWs()
 
-/**
- * @type {HTMLInputElement}
- */
-const $debugEnableLog = document.getElementById('enable-log')
+
+const $debugEnableLog = /** @type {HTMLInputElement} */ (document.getElementById('enable-log'))
 $debugEnableLog.addEventListener('change', e => {
     console.log('Debug log: ' + String($debugEnableLog.checked))
     debugEnableLog = $debugEnableLog.checked
