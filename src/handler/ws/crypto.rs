@@ -78,7 +78,7 @@ fn increase_nonce(nonce: &mut Nonce<<Aes128Gcm as AeadCore>::NonceSize>) {
         nonce[i] = c as u8;
         c >>= 8;
     }
-    if nonce == &Nonce::default() {
+    if c > 0 {
         panic!("nonce overflow. potential nonce reuse");
     }
 }

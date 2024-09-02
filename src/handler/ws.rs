@@ -5,7 +5,7 @@ use axum::extract::{
     State, WebSocketUpgrade,
 };
 use axum::response::IntoResponse;
-use tracing::error;
+use tracing::{debug, error};
 
 mod auth;
 mod crypto;
@@ -42,7 +42,7 @@ async fn handle_socket(mut ws: WebSocket, state: WsGlobalState) {
         ws_res.err().map(|e| e.close_frame)
     };
     if let Err(e) = ws.send(ws::Message::Close(close_frame)).await {
-        error!("failed to close websocket: {}", e);
+        debug!("failed to close websocket: {}", e);
     }
 }
 

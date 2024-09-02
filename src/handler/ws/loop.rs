@@ -15,7 +15,7 @@ use tracing::{error, warn};
 use super::crypto::Crypto;
 use super::WebSocketResult;
 use crate::handler::ws::error::WebSocketError;
-use crate::media::{AlbumImage, TimelineState, VolumeState};
+use crate::media::{AlbumImage, MediaManager, TimelineState, VolumeState};
 
 pub(super) async fn handle_socket_inner(
     ws: &mut WebSocket,
@@ -24,7 +24,6 @@ pub(super) async fn handle_socket_inner(
     const HEARTBEAT_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
     const SESSION_TOTAL_TIMEOUT: Duration = Duration::from_secs(3600 * 8);
     const ALBUM_TIMEOUT: Duration = Duration::from_secs(1);
-    use crate::media::{get_album_image, get_media_info, get_timeline_state, media_changed};
 
     match timeout(Duration::from_secs(5), initial_heartbeat(ws, crypto)).await {
         Ok(Ok(_)) => {}
@@ -49,9 +48,10 @@ pub(super) async fn handle_socket_inner(
     media_interval.reset();
     let mut album_retry = 0;
     let mut album_timeout = pin!(sleep(SESSION_TOTAL_TIMEOUT));
+    let mut media_manager = MediaManager::new().await?;
     let mut last_album_hash = "".into();
     let mut last_track = {
-        let media_info = get_media_info().await;
+        let media_info = media_manager.get_media_info().await;
         if let Ok(Some(_)) = media_info {
             album_timeout.as_mut().reset(Instant::now());
         }
@@ -61,7 +61,7 @@ pub(super) async fn handle_socket_inner(
             .await?;
         media_info.track
     };
-    let mut last_timeline = get_timeline_state().await.unwrap_or_default();
+    let mut last_timeline = media_manager.get_timeline_state().await.unwrap_or_default();
     let mut volume_client = crate::media::VolumeClient::create()?;
     loop {
         enum TriggerType {
@@ -79,7 +79,7 @@ pub(super) async fn handle_socket_inner(
                 error!("websocket heartbeat timeout");
                 break Ok(());
             },
-            res = media_changed() => { res?; TriggerType::MediaChanged },
+            res = media_manager.media_change() => { res?; TriggerType::MediaChanged },
             _ = volume_client.volume_change() => { TriggerType::VolumeChanged },
             _ = timeline_interval.tick() => { TriggerType::TimelineInterval },
             _ = media_interval.tick() => { TriggerType::MediaChanged },
@@ -137,7 +137,7 @@ pub(super) async fn handle_socket_inner(
                     .reset(Instant::now() + HEARTBEAT_REQUEST_TIMEOUT);
                 serde_json::to_string(&Heartbeat::default()).unwrap()
             }
-            TriggerType::MediaChanged => match get_media_info().await {
+            TriggerType::MediaChanged => match media_manager.get_media_info().await {
                 Ok(media_info) => {
                     let media_info = media_info.unwrap_or_default();
                     let content = serde_json::to_string(&media_info).unwrap();
@@ -169,7 +169,7 @@ pub(super) async fn handle_socket_inner(
                 })
                 .unwrap(),
             },
-            TriggerType::TimelineInterval => match get_timeline_state().await {
+            TriggerType::TimelineInterval => match media_manager.get_timeline_state().await {
                 Ok(timeline_state) => {
                     if timeline_state == last_timeline {
                         continue;
@@ -192,7 +192,7 @@ pub(super) async fn handle_socket_inner(
                 album_timeout
                     .as_mut()
                     .reset(Instant::now() + SESSION_TOTAL_TIMEOUT);
-                match get_album_image().await {
+                match media_manager.get_album_image().await {
                     Ok(Some(album)) => {
                         let hash = calculate_album_hash(&album);
                         if let Some(album) = Some(&album).filter(|_| hash != last_album_hash) {
@@ -299,8 +299,8 @@ struct TimelineRes<'a> {
 
 fn calculate_album_hash(album: &AlbumImage) -> &str {
     match album {
-        AlbumImage::Url(url) => &url,
-        AlbumImage::Blob { base64, .. } => &base64,
+        AlbumImage::Url(url) => url,
+        AlbumImage::Blob { base64, .. } => base64,
     }
 }
 

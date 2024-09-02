@@ -1,20 +1,29 @@
+use std::future::poll_fn;
 use std::io;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::task::Poll;
+use std::task::{Context, Poll};
 
 use futures::task::AtomicWaker;
 use windows::core::ComInterface;
-use windows::Foundation::TypedEventHandler;
-use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
+use windows::Foundation::{EventRegistrationToken, TypedEventHandler};
+use windows::Media::Control::{
+    GlobalSystemMediaTransportControlsSession, GlobalSystemMediaTransportControlsSessionManager,
+};
 use windows::Storage::Streams::DataReader;
 use windows::Win32::System::WinRT::IBufferByteAccess;
 
 use crate::media::AlbumImage;
 
 pub(super) struct WinrtControl {
-    _is_qqmusic_current: Arc<AtomicBool>,
+    is_qqmusic_current: bool,
     manager: GlobalSystemMediaTransportControlsSessionManager,
+    current_session: Option<(
+        GlobalSystemMediaTransportControlsSession,
+        Option<EventRegistrationToken>,
+    )>,
+    changed_ctx: Arc<MediaChangedCallbackContext>,
+    session_changed_token: EventRegistrationToken,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,72 +39,100 @@ pub(super) struct WinrtMediaInfo {
 #[derive(Default)]
 struct MediaChangedCallbackContext {
     waker: AtomicWaker,
-    fired: AtomicBool,
+    media_changed: AtomicBool,
+    current_session_changed: AtomicBool,
 }
 
 impl WinrtControl {
     pub(super) async fn create() -> io::Result<Self> {
-        Ok(Self {
-            manager: GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.await?,
-            _is_qqmusic_current: Arc::new(AtomicBool::new(false)),
-        })
-    }
-
-    pub(super) fn is_qqmusic_current(&self) -> bool {
-        let Ok(session) = self.manager.GetCurrentSession() else {
-            return false;
-        };
-        session
-            .SourceAppUserModelId()
-            .unwrap()
-            .to_string_lossy()
-            .contains("QQMusic.exe")
-    }
-
-    pub(super) async fn media_changed(&self) -> io::Result<()> {
-        use std::sync::atomic::Ordering;
-
-        let ctx = Arc::new(MediaChangedCallbackContext::default());
-        let session_changed_token = self.manager.CurrentSessionChanged(&{
+        let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.await?;
+        let ctx = Arc::new(MediaChangedCallbackContext {
+            waker: AtomicWaker::new(),
+            media_changed: AtomicBool::new(false),
+            current_session_changed: AtomicBool::new(true),
+        });
+        let session_changed_token = manager.CurrentSessionChanged(&{
             let ctx = ctx.clone();
             TypedEventHandler::new(move |_, _| {
-                ctx.fired.store(true, Ordering::SeqCst);
+                ctx.current_session_changed.store(true, Ordering::Release);
+                ctx.media_changed.store(true, Ordering::SeqCst);
                 ctx.waker.wake();
                 Ok(())
             })
         })?;
-        let session = self.manager.GetCurrentSession().ok();
-        let media_changed_token = session
-            .map(|session| {
-                let token = session.MediaPropertiesChanged(&{
-                    let ctx = ctx.clone();
+        let mut me = Self {
+            current_session: None,
+            is_qqmusic_current: false,
+            manager,
+            session_changed_token,
+            changed_ctx: ctx,
+        };
+        me.refresh_current_session();
+        Ok(me)
+    }
+
+    fn refresh_current_session(&mut self) -> Option<GlobalSystemMediaTransportControlsSession> {
+        if self
+            .changed_ctx
+            .current_session_changed
+            .swap(false, Ordering::Acquire)
+        {
+            if let Some((last_session, Some(token))) = self.current_session.take() {
+                last_session.RemoveMediaPropertiesChanged(token).ok();
+            }
+            self.current_session = self.manager.GetCurrentSession().ok().map(|s| (s, None));
+            self.is_qqmusic_current = self
+                .current_session
+                .as_ref()
+                .map(|(s, _)| {
+                    s.SourceAppUserModelId()
+                        .unwrap()
+                        .to_string_lossy()
+                        .contains("QQMusic.exe")
+                })
+                .unwrap_or_default();
+        }
+        self.current_session.as_ref().map(|(s, _)| s.clone())
+    }
+
+    pub(super) fn is_qqmusic_current(&mut self) -> bool {
+        if self
+            .changed_ctx
+            .current_session_changed
+            .load(Ordering::Relaxed)
+        {
+            self.refresh_current_session();
+        }
+        self.is_qqmusic_current
+    }
+
+    fn poll_media_change(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        self.changed_ctx.waker.register(cx.waker());
+        if self.changed_ctx.media_changed.swap(false, Ordering::SeqCst) {
+            return Poll::Ready(Ok(()));
+        }
+        self.refresh_current_session();
+        if let Some((session, token @ None)) = &mut self.current_session {
+            let ctx = self.changed_ctx.clone();
+            *token = session
+                .MediaPropertiesChanged(&{
                     TypedEventHandler::new(move |_, _| {
-                        ctx.fired.store(true, Ordering::SeqCst);
+                        ctx.media_changed.store(true, Ordering::SeqCst);
                         ctx.waker.wake();
                         Ok(())
                     })
-                })?;
-                windows::core::Result::Ok((session, token))
-            })
-            .transpose()?;
-        futures::future::poll_fn(|cx| {
-            if ctx.fired.load(Ordering::SeqCst) {
-                return Poll::Ready(());
-            }
-            ctx.waker.register(cx.waker());
-            Poll::Pending
-        })
-        .await;
-        let _ = self
-            .manager
-            .RemoveCurrentSessionChanged(session_changed_token);
-        let _ =
-            media_changed_token.map(|(session, token)| session.RemoveMediaPropertiesChanged(token));
-        Ok(())
+                })
+                .ok();
+        }
+        Poll::Pending
     }
 
-    pub(super) async fn get_media_info(&self) -> io::Result<Option<WinrtMediaInfo>> {
-        let Ok(session) = self.manager.GetCurrentSession() else {
+    pub(super) async fn media_change(&mut self) -> io::Result<()> {
+        poll_fn(|cx| self.poll_media_change(cx)).await
+    }
+
+    pub(super) async fn get_media_info(&mut self) -> io::Result<Option<WinrtMediaInfo>> {
+        let Some(session) = self.refresh_current_session() else {
             return Ok(None);
         };
 
@@ -154,13 +191,24 @@ impl WinrtControl {
     }
 }
 
+impl Drop for WinrtControl {
+    fn drop(&mut self) {
+        self.manager
+            .RemoveCurrentSessionChanged(self.session_changed_token)
+            .ok();
+        if let Some((last_session, Some(token))) = self.current_session.take() {
+            last_session.RemoveMediaPropertiesChanged(token).ok();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[tokio::test]
     async fn test_winrt_control() -> io::Result<()> {
-        let control = WinrtControl::create().await?;
+        let mut control = WinrtControl::create().await?;
         let info = control.get_media_info().await?;
         println!("{:#?}", info);
         let img = control.get_album_img().await?;

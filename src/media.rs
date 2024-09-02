@@ -2,9 +2,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-pub use crate::sys::{
-    get_album_image, get_media_info, get_timeline_state, media_changed, VolumeClient,
-};
+pub use crate::sys::{MediaManager, VolumeClient};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct MediaInfo {
