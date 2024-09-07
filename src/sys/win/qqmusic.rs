@@ -157,7 +157,7 @@ impl QQMusicProcess {
                 unsafe { self.read_dll_data(0xAABAC4) }?
             }
         };
-        if version != 2037 {
+        if version != 2037 && version != 2039 {
             return Ok(None);
         }
 

@@ -167,7 +167,11 @@ impl WinrtControl {
         let mut content_type;
         let base64 = {
             let reader = {
-                let read_task = media_property.Thumbnail()?.OpenReadAsync()?;
+                let read_task = if let Ok(thumbnail) = media_property.Thumbnail() {
+                    thumbnail.OpenReadAsync()?
+                } else {
+                    return Ok(None);
+                };
                 let stream = read_task.await?;
                 content_type = stream.ContentType()?.to_string_lossy();
                 DataReader::CreateDataReader(&stream)?
