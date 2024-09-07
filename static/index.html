@@ -21,54 +21,47 @@
     </section>
 </nav>
 
-<div id="main-wrapper">
-    <main>
-        <section id="section-album" class="section-album-aligned">
-            <img id="image-album" alt="Album cover image" data-cmd-name="like">
-            <i id="image-album-like" class="fa-solid fa-heart"></i>
-        </section>
-        <section id="section-track-info" class="section-album-aligned">
-            <div id="text-track-title"></div>
-            <div id="text-track-artist"></div>
-            <div id="text-track-album"></div>
-        </section>
-        <section id="section-controller">
-            <div id="container-controller">
-                <div id="panel-controller">
-                    <div id="progress-bar-track-progress" class="progress-bar">
-                        <div class="progress-bar-background"></div>
-                        <div class="progress-bar-cursor breathing"></div>
-                    </div>
-                    <button id="button-prev-track" title="Previous Track" class="button-controller"
-                        data-cmd-name="prev_track" type="button">
-                        <i class="fa-solid fa-backward-fast"></i>
-                    </button>
-                    <button id="button-play-pause" title="Toggle Play/Pause" class="button-controller"
-                        data-cmd-name="play_pause" type="button">
-                        <i class="fa-solid fa-play"></i>
-                        /
-                        <i class="fa-solid fa-pause"></i>
-                    </button>
-                    <button id="button-next-track" title="Next Track" class="button-controller"
-                        data-cmd-name="next_track" type="button">
-                        <i class="fa-solid fa-forward-fast"></i>
-                    </button>
-                    <button id="button-volume-up" title="Volume Up" class="button-controller" data-cmd-name="volume_up"
-                        type="button">
-                        <i class="fa-solid fa-volume-high"></i>
-                    </button>
-                    <button id="button-volume-down" title="Volume Down" class="button-controller"
-                        data-cmd-name="volume_down" type="button">
-                        <i class="fa-solid fa-volume-low"></i>
-                    </button>
-                    <div id="container-volume-level">
-                        <div id="text-volume-level"></div>
-                    </div>
-                </div>
+<main>
+    <section id="section-album">
+        <img id="image-album" alt="Album cover image" data-cmd-name="like">
+        <i id="image-album-like" class="fa-solid fa-heart"></i>
+    </section>
+    <section id="section-track-info">
+        <div id="text-track-title"></div>
+        <div id="text-track-artist"></div>
+        <div id="text-track-album"></div>
+    </section>
+    <section id="section-controller">
+        <div id="panel-controller">
+            <div id="progress-bar-track-progress" class="progress-bar">
+                <div class="progress-bar-background"></div>
+                <div class="progress-bar-cursor breathing"></div>
             </div>
-        </section>
-    </main>
-</div>
+            <button id="button-prev-track" title="Previous Track" class="button-controller" data-cmd-name="prev_track"
+                type="button">
+                <i class="fa-solid fa-backward-fast"></i>
+            </button>
+            <button id="button-play-pause" title="Toggle Play/Pause" class="button-controller"
+                data-cmd-name="play_pause" type="button">
+                <i class="fa-solid fa-play"></i>
+                <i class="fa-solid fa-pause"></i>
+            </button>
+            <button id="button-next-track" title="Next Track" class="button-controller" data-cmd-name="next_track"
+                type="button">
+                <i class="fa-solid fa-forward-fast"></i>
+            </button>
+            <button id="button-volume-up" title="Volume Up" class="button-controller" data-cmd-name="volume_up"
+                type="button">
+                <i class="fa-solid fa-volume-high"></i>
+            </button>
+            <button id="button-volume-down" title="Volume Down" class="button-controller" data-cmd-name="volume_down"
+                type="button">
+                <i class="fa-solid fa-volume-low"></i>
+            </button>
+            <div id="text-volume-level"></div>
+        </div>
+    </section>
+</main>
 
 <section id="section-debug">
     <details>
