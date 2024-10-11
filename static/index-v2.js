@@ -127,8 +127,8 @@ const createPsk$ = () =>
         rxjs.map(e => $inputPrivateKey.value.trim()),
         rxjs.debounceTime(1000),
         rxjs.distinctUntilChanged(),
+        rxjs.tap(psk => localStorage.setItem('private-key', psk)),
         rxjs.startWith(String($inputPrivateKey.value)),
-        rxjs.tap(psk => localStorage.setItem('private-key', psk))
     )
 
 const Commands =
@@ -144,7 +144,7 @@ function createControl$() {
     const buttonCtrl$s = Array.from(document.querySelectorAll('#panel-controller .button-controller'))
         .map(button => rxjs.fromEvent(button, 'click')
             .pipe(rxjs.map(() => {
-                const cmdName = button.getAttribute('data-cmd-name')
+                const cmdName = button.getAttribute('data-cmd-name') ?? ''
                 if (!/** @type {readonly string[]} */(Commands).includes(cmdName)) {
                     new Error(`Invalid command name: ${cmdName}`)
                 }
@@ -208,7 +208,10 @@ function deserializeWsEvents(data) {
     return JSON.parse(data)
 }
 
-function subscribeWs() {
+/**
+ * @param {string} psk 
+ */
+function runWs$(psk) {
     const $playPauseBtn = document.getElementById('button-play-pause')
     /** * @type {HTMLDivElement} */
     const $trackProgressCursor = document.querySelector('#progress-bar-track-progress>.progress-bar-cursor')
@@ -218,45 +221,44 @@ function subscribeWs() {
     const $trackAlbum = document.getElementById('text-track-album')
     const $volumeLevel = document.getElementById('text-volume-level')
 
-    return createPsk$().pipe(
-        rxjs.filter(psk => psk.length > 0),
-        rxjs.switchMap(psk => rxjs.defer(() => rxjs.from(KeyExchange.generate(psk)))),
-        rxjs.switchMap(ctx => new rxjs.Observable(
-            /**
-             * @param {Subscriber<{
-             * keyExchange: KeyExchange,
-             * ws: WebSocket,
-             * msg$: Subject<ArrayBuffer>
-             * }>} subscriber
-             */
-            subscriber => {
-                const ws = new WebSocket('main_ws')
+    const ws$ = new rxjs.Observable(
+        /**
+         * @param {Subscriber<{
+         * ws: WebSocket,
+         * msg$: Subject<ArrayBuffer>
+         * }>} subscriber
+         */
+        subscriber => {
+            const ws = new WebSocket('main_ws')
+            if (debugEnableLog) {
+                console.log('Connecting to main_ws')
+            }
+            ws.binaryType = 'arraybuffer'
+            /** @type {Subject<ArrayBuffer>} */
+            const msg$ = new rxjs.Subject()
+            ws.onclose = e => {
+                const msg = `Disconnected from main_ws, code: ${e.code}, reason: ${e.reason}`
                 if (debugEnableLog) {
-                    console.log('Connecting to main_ws')
+                    console.log(msg)
                 }
-                ws.binaryType = 'arraybuffer'
-                /** @type {Subject<ArrayBuffer>} */
-                const msg$ = new rxjs.Subject()
-                ws.onclose = e => {
-                    const msg = `Disconnected from main_ws, code: ${e.code}, reason: ${e.reason}`
-                    if (debugEnableLog) {
-                        console.log(msg)
-                    }
-                    subscriber.error(new Error(msg))
-                    msg$.complete()
+                subscriber.error(new Error(msg))
+                msg$.complete()
+            }
+            ws.onmessage = e => msg$.next(e.data)
+            ws.onerror = e => subscriber.error(e)
+            ws.onopen = () => {
+                if (debugEnableLog) {
+                    console.log('Connected to main_ws')
                 }
-                ws.onmessage = e => msg$.next(e.data)
-                ws.onerror = e => subscriber.error(e)
-                ws.onopen = () => {
-                    if (debugEnableLog) {
-                        console.log('Connected to main_ws')
-                    }
-                    ws.send(ctx.publicKey)
-                    subscriber.next({ keyExchange: ctx.keyExchange, ws, msg$ })
-                }
-                return () => ws.close()
-            })
-        ),
+                subscriber.next({ ws, msg$ })
+            }
+            return () => ws.close()
+        })
+    return ws$.pipe(
+        rxjs.switchMap(ctx => rxjs.from(KeyExchange.generate(psk)).pipe(
+            rxjs.tap(({ publicKey }) => ctx.ws.send(publicKey)),
+            rxjs.map(({ keyExchange }) => ({ ...ctx, keyExchange }))
+        )),
         rxjs.switchMap(ctx => ctx.msg$.pipe(
             rxjs.first(),
             rxjs.map(serverMaterial => ({ ...ctx, serverMaterial }))
@@ -310,9 +312,11 @@ function subscribeWs() {
                 }
             }
         }),
-        rxjs.retry({ delay: 3000 })
-    )
-        .subscribe({
+        rxjs.retry({
+            delay: (_err, retryCount) => rxjs.timer(retryCount === 1 ? 0 : 3000),
+            resetOnSuccess: true
+        }),
+        rxjs.tap({
             next: ctx => {
                 if ('payload' in ctx) {
                     ctx.ws.send(ctx.payload)
@@ -365,9 +369,17 @@ function subscribeWs() {
                 }
             },
         })
+    )
 }
 
-subscribeWs()
+function subscribeWsOnPsk() {
+    createPsk$().pipe(
+        rxjs.filter(psk => Boolean(psk)),
+        rxjs.switchMap(psk => runWs$(psk))
+    ).subscribe({})
+}
+
+subscribeWsOnPsk()
 
 
 const $debugEnableLog = /** @type {HTMLInputElement} */ (document.getElementById('enable-log'))
