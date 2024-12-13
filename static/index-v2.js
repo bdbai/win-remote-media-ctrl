@@ -151,7 +151,7 @@ function createControl$() {
                 return /** @type {Commands} */ (cmdName)
             })))
     const $albumLike = document.getElementById('image-album-like')
-    const like$ = rxjs.fromEvent(document.getElementById('image-album'), 'click')
+    const like$ = rxjs.fromEvent(document.getElementById('section-album'), 'click')
         .pipe(
             rxjs.map(() => Date.now()),
             rxjs.startWith(0),

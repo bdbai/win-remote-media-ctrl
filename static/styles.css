@@ -92,6 +92,8 @@ body>main {
 #section-album {
     position: relative;
     grid-column: 2;
+    user-select: none;
+    touch-action: manipulation;
 }
 
 #section-controller {
@@ -106,10 +108,12 @@ body>main {
 }
 
 #image-album {
-    touch-action: manipulation;
     border-radius: 0.5rem;
     box-shadow: black 0px 0px 10px;
     display: none;
+    position: absolute;
+    margin: auto;
+    inset: 0;
 }
 
 #image-album.loaded {
