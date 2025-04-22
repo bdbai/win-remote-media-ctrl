@@ -150,22 +150,27 @@ impl QQMusicProcess {
         Ok(unsafe { wcstr.to_string() }.ok())
     }
     pub(super) fn collect_raw_info(&mut self) -> io::Result<Option<RawInfo>> {
-        let version: u32 = match unsafe { self.read_dll_data(0xAB9BDC) } {
+        const SUPPORTED_VERSION: u32 = 2131;
+        const OFFSET_QMDLL_PAUSED: isize = 0xAE8B14;
+        const OFFSET_QMDLL_TITLE_IMG_PTR: isize = 0xAE8B58;
+        const OFFSET_QMDLL_ALBUM_IMG_PTR: isize = 0xAE8CB4;
+        const OFFSET_QMDLL_VER: isize = 0xAE3F84;
+
+        let version: u32 = match unsafe { self.read_dll_data(OFFSET_QMDLL_VER) } {
             Ok(version) => version,
             Err(_) => {
                 self.try_open_process()?;
-                unsafe { self.read_dll_data(0xAB9BDC) }?
+                unsafe { self.read_dll_data(OFFSET_QMDLL_VER) }?
             }
         };
-        if version != 2041 {
+        if version != SUPPORTED_VERSION {
             return Ok(None);
         }
-
         let mut last_raw_info = RawInfo::default();
         for _ in 0..6 {
-            let paused = unsafe { self.read_dll_data(0xABE064)? };
-            let track_info = unsafe { self.read_dll_data(0xABE0A8)? };
-            let album_img_ptr = unsafe { self.read_dll_data(0xABE200)? };
+            let paused = unsafe { self.read_dll_data(OFFSET_QMDLL_PAUSED)? };
+            let track_info = unsafe { self.read_dll_data(OFFSET_QMDLL_TITLE_IMG_PTR)? };
+            let album_img_ptr = unsafe { self.read_dll_data(OFFSET_QMDLL_ALBUM_IMG_PTR)? };
             let mut raw_info = RawInfo {
                 paused,
                 track_info,
