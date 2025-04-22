@@ -79,7 +79,7 @@ async fn negotiate_ws_inner(
     let server_material = EphemeralSecret::random(&mut OsRng);
     {
         let server_material = EncodedPoint::from(&server_material.public_key());
-        ws.send(ws::Message::Binary(server_material.as_bytes().to_vec()))
+        ws.send(ws::Message::Binary(server_material.to_bytes().into()))
             .await?;
     }
     let secret = server_material.diffie_hellman(&client_material);

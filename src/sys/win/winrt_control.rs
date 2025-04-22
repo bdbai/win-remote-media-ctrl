@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use futures::task::AtomicWaker;
-use windows::core::ComInterface;
-use windows::Foundation::{EventRegistrationToken, TypedEventHandler};
+use windows::core::Interface;
+use windows::Foundation::TypedEventHandler;
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession, GlobalSystemMediaTransportControlsSessionManager,
 };
@@ -14,6 +14,8 @@ use windows::Storage::Streams::DataReader;
 use windows::Win32::System::WinRT::IBufferByteAccess;
 
 use crate::media::AlbumImage;
+
+type EventRegistrationToken = i64;
 
 pub(super) struct WinrtControl {
     is_qqmusic_current: bool,

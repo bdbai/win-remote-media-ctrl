@@ -123,7 +123,7 @@ impl Drop for VolumeClient {
     }
 }
 
-impl IAudioEndpointVolumeCallback_Impl for VolumeChangedCallback {
+impl IAudioEndpointVolumeCallback_Impl for VolumeChangedCallback_Impl {
     fn OnNotify(&self, _pnotify: *mut AUDIO_VOLUME_NOTIFICATION_DATA) -> Result<()> {
         self.fired.store(true, Ordering::SeqCst);
         self.waker.wake();

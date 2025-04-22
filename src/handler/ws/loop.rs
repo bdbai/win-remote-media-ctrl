@@ -5,12 +5,13 @@ use axum::{
     extract::ws::{self, WebSocket},
     Error as AxumError,
 };
+use bytes::BytesMut;
 use serde::{Deserialize, Serialize};
 use tokio::{
     select,
     time::{interval, sleep, timeout, Instant},
 };
-use tracing::{error, warn};
+use tracing::{debug, error, warn};
 
 use super::crypto::Crypto;
 use super::WebSocketResult;
@@ -57,8 +58,10 @@ pub(super) async fn handle_socket_inner(
         }
         let media_info = media_info.ok().flatten().unwrap_or_default();
         let content = serde_json::to_string(&media_info).unwrap();
-        ws.send(ws::Message::Binary(crypto.encrypt(content.as_bytes())))
-            .await?;
+        ws.send(ws::Message::Binary(
+            crypto.encrypt(content.as_bytes()).into(),
+        ))
+        .await?;
         media_info.track
     };
     let mut last_timeline = media_manager.get_timeline_state().await.unwrap_or_default();
@@ -90,6 +93,18 @@ pub(super) async fn handle_socket_inner(
             TriggerType::Recv(recv) => match recv {
                 Some(Ok(ws::Message::Close(_))) | None => break Ok(()),
                 Some(Err(e)) => {
+                    let e = e.into_inner();
+                    if e.downcast_ref::<tungstenite::Error>()
+                        .and_then(|e| match e {
+                            tungstenite::Error::Io(e) => Some(e),
+                            _ => None,
+                        })
+                        .filter(|e| e.kind() == io::ErrorKind::ConnectionReset)
+                        .is_some()
+                    {
+                        debug!("websocket connection reset");
+                        break Ok(());
+                    }
                     error!("websocket recv error: {:?}", e);
                     break Err(e.into());
                 }
@@ -99,7 +114,7 @@ pub(super) async fn handle_socket_inner(
                         .as_mut()
                         .reset(Instant::now() + SESSION_TOTAL_TIMEOUT);
                     let req: Request = {
-                        let mut msg = msg.into_data();
+                        let mut msg: BytesMut = msg.into_data().into();
                         let data = crypto.decrypt_in_place(&mut msg)?;
                         serde_json::from_slice(data)?
                     };
@@ -107,7 +122,7 @@ pub(super) async fn handle_socket_inner(
                     let res = match &req {
                         Request::Heartbeat => {
                             let res = serde_json::to_string(&HeartbeatRes::default()).unwrap();
-                            ws.send(ws::Message::Binary(crypto.encrypt(res.as_bytes())))
+                            ws.send(ws::Message::Binary(crypto.encrypt(res.as_bytes()).into()))
                                 .await?;
                             Ok(())
                         }
@@ -221,8 +236,10 @@ pub(super) async fn handle_socket_inner(
             }
             TriggerType::Recv(_) => continue,
         };
-        ws.send(ws::Message::Binary(crypto.encrypt(content.as_bytes())))
-            .await?;
+        ws.send(ws::Message::Binary(
+            crypto.encrypt(content.as_bytes()).into(),
+        ))
+        .await?;
     }
 }
 
@@ -239,7 +256,7 @@ async fn initial_heartbeat(ws: &mut WebSocket, crypto: &mut Crypto) -> WebSocket
                 error: io::Error::new(io::ErrorKind::UnexpectedEof, "unexpected eof").into(),
             });
         };
-        let mut msg = msg.into_data();
+        let mut msg: BytesMut = msg.into_data().into();
         let msg = crypto.decrypt_in_place(&mut msg)?;
         serde_json::from_slice::<Request>(msg)?
     };
@@ -254,7 +271,7 @@ async fn initial_heartbeat(ws: &mut WebSocket, crypto: &mut Crypto) -> WebSocket
         }
     })?;
     let res = serde_json::to_string(&HeartbeatRes::default()).unwrap();
-    ws.send(ws::Message::Binary(crypto.encrypt(res.as_bytes())))
+    ws.send(ws::Message::Binary(crypto.encrypt(res.as_bytes()).into()))
         .await?;
     Ok(())
 }

@@ -10,7 +10,7 @@ use std::{
 };
 
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{FALSE, HANDLE, HMODULE};
+use windows::Win32::Foundation::{HANDLE, HMODULE};
 use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPPROCESS,
@@ -63,7 +63,8 @@ impl QQMusicProcess {
     }
 
     fn try_open_process(&mut self) -> io::Result<()> {
-        static PROCESS_NAME: &[u8; 12] = b"QQMusic.exe\0";
+        static PROCESS_NAME: &[i8] =
+            unsafe { std::mem::transmute(c"QQMusic.exe".to_bytes_with_nul()) };
         static MODULE_NAME: &str = "\\QQMusic.dll";
 
         let mut pid = None;
@@ -74,7 +75,7 @@ impl QQMusicProcess {
             entry.dwSize = std::mem::size_of_val(&entry) as _;
             Process32First(raw_snapshot, &mut entry)?;
             while let Ok(()) = Process32Next(raw_snapshot, &mut entry) {
-                if entry.szExeFile[..12] == *PROCESS_NAME {
+                if entry.szExeFile[..PROCESS_NAME.len()] == *PROCESS_NAME {
                     pid = Some(entry.th32ProcessID);
                     break;
                 }
@@ -85,7 +86,7 @@ impl QQMusicProcess {
         let mut mid = None;
         let process;
         unsafe {
-            process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid)?;
+            process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid)?;
             self.process = OwnedHandle::from_raw_handle(process.0 as _);
             let mut hmods = [HMODULE::default(); 1024];
             let mut cb_needed = 0;
@@ -99,7 +100,7 @@ impl QQMusicProcess {
 
             for hmod in &hmods[..(cb_needed as usize / size_of::<HMODULE>())] {
                 let mut lpfilename = [0u8; 1024];
-                if GetModuleFileNameExA(process, *hmod, &mut lpfilename) == 0 {
+                if GetModuleFileNameExA(Some(process), Some(*hmod), &mut lpfilename) == 0 {
                     continue;
                 }
 
@@ -112,7 +113,7 @@ impl QQMusicProcess {
         }
 
         self.qqmusic_dll_base = if let Some(mid) = mid {
-            mid.0
+            mid.0 as isize
         } else {
             return Ok(());
         };
