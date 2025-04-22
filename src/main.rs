@@ -31,10 +31,21 @@ async fn load_private_key() -> [u8; 64] {
 }
 
 async fn prepare_rustls_config() -> RustlsConfig {
+    use tracing::info;
     async fn download_bytes(url: &str) -> Vec<u8> {
         let bytes = reqwest::get(url).await.unwrap().bytes().await.unwrap();
         bytes.to_vec()
     }
+    if let (Some(cert_path), Some(key_path)) = (
+        std::env::var_os("WIN_REMOTE_MEDIA_CTRL_TLS_CERT_PATH").filter(|s| !s.is_empty()),
+        std::env::var_os("WIN_REMOTE_MEDIA_CTRL_TLS_KEY_PATH").filter(|s| !s.is_empty()),
+    ) {
+        info!("Using cert and key from env");
+        return RustlsConfig::from_pem_chain_file(cert_path, key_path)
+            .await
+            .unwrap();
+    }
+    info!("Downloading cert and key from traefik.me");
     let (cert, key) = tokio::join!(
         download_bytes("https://traefik.me/fullchain.pem"),
         download_bytes("https://traefik.me/privkey.pem")
